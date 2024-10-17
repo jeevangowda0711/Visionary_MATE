@@ -10,35 +10,35 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 import google.generativeai as genai
-from PyPDF2 import PdfReader
-from docx import Document
-from PIL import Image
-import pytesseract
+from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, Settings
+from llama_index.llms.gemini import Gemini
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Load environment variables
+# Load environment variables and set up API key
 load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+if not GOOGLE_API_KEY:
+    raise ValueError("GOOGLE_API_KEY is not set in the environment variables.")
 
-if not GEMINI_API_KEY:
-    raise ValueError("GEMINI_API_KEY is not set in the environment variables.")
+genai.configure(api_key=GOOGLE_API_KEY)
 
-# Configure the Google Generative AI (Gemini) API
-genai.configure(api_key=GEMINI_API_KEY)
-
-# Initialize the Gemini model
-model = genai.GenerativeModel('gemini-pro')
-vision_model = genai.GenerativeModel('gemini-pro-vision')
+# Initialize models
+gemini_flash = genai.GenerativeModel('models/gemini-1.5-flash')
+embed_model = HuggingFaceEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
+llm = Gemini(model_name="models/gemini-1.5-flash", api_key=GOOGLE_API_KEY)
+Settings.embed_model = embed_model
+Settings.llm = llm
 
 # Initialize the APIRouter
 mate_router = APIRouter()
 mate_templates = None
 
-# Global dictionary to store document content
-document_store = {}
+# Global index variable
+index = None
 
 class ChatRequest(BaseModel):
     message: str = Field(default="")
@@ -52,76 +52,48 @@ async def mate_home(request: Request):
 def detect_file_type(filename):
     return mimetypes.guess_type(filename)[0] or "application/octet-stream"
 
-def extract_text_from_pdf(file_path):
-    reader = PdfReader(file_path)
-    text = ""
-    for page in reader.pages:
-        text += page.extract_text() + "\n"
-    return text
-
-def extract_text_from_docx(file_path):
-    doc = Document(file_path)
-    text = ""
-    for para in doc.paragraphs:
-        text += para.text + "\n"
-    return text
-
-def extract_text_from_image(file_path):
-    try:
-        img = Image.open(file_path)
-        text = pytesseract.image_to_string(img)
-        return text
-    except pytesseract.TesseractNotFoundError:
-        logger.error("Tesseract is not installed or not in PATH")
-        return "Image text extraction is not available. Tesseract OCR is not installed."
-
 @mate_router.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
-    global document_store
+    global index
     try:
         content = await file.read()
         file_type = detect_file_type(file.filename)
         logger.info(f"Uploading file: {file.filename} (Type: {file_type})")
 
+        if file_type.startswith(("image/", "audio/", "video/")):
+            encoded_file = base64.b64encode(content).decode()
+            logger.info(f"Media file processed successfully: {file.filename}")
+            return JSONResponse(content={
+                "message": f"{file_type} uploaded successfully",
+                "filename": file.filename,
+                "file_data": encoded_file,
+                "mime_type": file_type
+            })
+
+        # Use SimpleDirectoryReader to process document files
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_file_path = os.path.join(temp_dir, file.filename)
             with open(temp_file_path, "wb") as temp_file:
                 temp_file.write(content)
+            
+            logger.info(f"Attempting to process file: {file.filename}")
+            reader = SimpleDirectoryReader(temp_dir)
+            documents = reader.load_data()
+            logger.info(f"Successfully processed file: {file.filename}")
 
-            if file_type == "application/pdf":
-                extracted_text = extract_text_from_pdf(temp_file_path)
-            elif file_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-                extracted_text = extract_text_from_docx(temp_file_path)
-            elif file_type.startswith("image/"):
-                extracted_text = extract_text_from_image(temp_file_path)
-                if "Tesseract OCR is not installed" in extracted_text:
-                    # If Tesseract is not available, store the image for vision model
-                    with open(temp_file_path, "rb") as img_file:
-                        document_store[file.filename] = {
-                            "type": "image",
-                            "content": base64.b64encode(img_file.read()).decode()
-                        }
-                    return JSONResponse(content={
-                        "message": f"Image file stored for vision processing",
-                        "filename": file.filename
-                    })
-            else:
-                return JSONResponse(content={"message": "Unsupported file type"}, status_code=400)
+        if not documents:
+            logger.warning(f"No content extracted from file: {file.filename}")
+            raise ValueError("No content could be extracted from the file.")
 
-        if extracted_text:
-            document_store[file.filename] = {
-                "type": "text",
-                "content": extracted_text
-            }
-            logger.info(f"File processed and stored successfully: {file.filename}")
-            return JSONResponse(content={
-                "message": f"{file_type} file processed and stored successfully",
-                "filename": file.filename,
-                "content_preview": extracted_text[:500] + "..." if len(extracted_text) > 500 else extracted_text
-            })
-        else:
-            return JSONResponse(content={"message": "No content could be extracted from the file."}, status_code=400)
+        index = VectorStoreIndex.from_documents(documents)
+        logger.info(f"File processed and indexed successfully: {file.filename}")
+        logger.info(f"Index now contains {len(index.docstore.docs)} documents")
 
+        return JSONResponse(content={
+            "message": f"{file_type} file processed and indexed successfully",
+            "filename": file.filename,
+            "content_preview": documents[0].text[:500] + "..." if len(documents[0].text) > 500 else documents[0].text
+        })
     except Exception as e:
         logger.error(f"Error in upload_file: {str(e)}")
         logger.error(traceback.format_exc())
@@ -129,31 +101,42 @@ async def upload_file(file: UploadFile = File(...)):
 
 @mate_router.post("/chat")
 async def chat(chat_request: ChatRequest):
+    global index
     try:
         if not chat_request.message and not chat_request.file:
             raise HTTPException(status_code=400, detail="Message and file cannot both be empty")
 
-        if chat_request.file and chat_request.file in document_store:
-            doc = document_store[chat_request.file]
-            if doc["type"] == "text":
-                prompt = f"Based on the following document content, answer this question: {chat_request.message}\n\nDocument content: {doc['content']}"
-                response = model.generate_content(prompt)
-                mode = "Document"
-            elif doc["type"] == "image":
-                image_parts = [
-                    {
-                        "mime_type": chat_request.fileType,
-                        "data": base64.b64decode(doc['content'])
-                    }
-                ]
-                prompt = f"Analyze this image and answer the following question: {chat_request.message}"
-                response = vision_model.generate_content([prompt, image_parts[0]])
-                mode = "Vision"
-        else:
-            response = model.generate_content(chat_request.message)
-            mode = "Direct"
+        if chat_request.file:
+            if chat_request.fileType.startswith(('image/', 'audio/', 'video/')):
+                # Handle media files directly with Gemini
+                prompt = [chat_request.message or f"Analyze this {chat_request.fileType.split('/')[0]}", 
+                          {"mime_type": chat_request.fileType, "data": base64.b64decode(chat_request.file)}]
+                response = gemini_flash.generate_content(prompt)
+                mode = chat_request.fileType.split('/')[0].capitalize()
+            else:
+                # For document types, use the RAG pipeline
+                if index:
+                    query_engine = index.as_query_engine()
+                    response = query_engine.query(chat_request.message)
+                    mode = "RAG"
+                else:
+                    raise HTTPException(status_code=400, detail="No indexed documents available for query")
+        elif chat_request.message:
+            if index:
+                # If there are indexed documents, use RAG pipeline
+                query_engine = index.as_query_engine()
+                response = query_engine.query(chat_request.message)
+                mode = "RAG"
+            else:
+                # If no documents are indexed, use direct Gemini processing
+                response = gemini_flash.generate_content(chat_request.message)
+                mode = "Direct"
 
-        response_text = response.text
+        # Extract the text content from the response
+        if isinstance(response, str):
+            response_text = response
+        else:
+            response_text = response.text if hasattr(response, 'text') else str(response)
 
         return JSONResponse(content={"response": response_text, "mode": mode})
     except Exception as e:
