@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Combined App{% endblock %}</title>
+  <style>
+    /* Inlined CSS for styling */
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+    }
+    .toggle-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background-color: #000;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding: 6px;
+      z-index: 1000;
+    }
+    .toggle-container span {
+      flex: 1;
+      text-align: center;
+      font-weight: bold;
+      color: #fff;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.3s ease;
+    }
+    .toggle-container span::after {
+      content: '';
+      position: absolute;
+      width: 100%;
+      height: 2px;
+      bottom: -5px;
+      left: 0;
+      background-color: #fff;
+      visibility: hidden;
+      transform: scaleX(0);
+      transition: all 0.3s ease-in-out;
+    }
+    .toggle-container span:hover {
+      color: #FFD700; /* Gold color on hover */
+    }
+    .toggle-container span:hover::after {
+      visibility: visible;
+      transform: scaleX(1);
+    }
+    #app-content {
+      flex: 1;
+      overflow-y: auto;
+      padding-top: 60px; /* Height of the toggle container */
+    }
+  </style>
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  <!-- Toggle Button -->
+  <div class="toggle-container {% block toggle_position %}{% endblock %}" id="toggle">
+    <span onclick="window.location.href='/visionary'">VISIONARY</span>
+    <span onclick="window.location.href='/'">HOME</span>
+    <span onclick="window.location.href='/mate'">RAG</span>
+  </div>
+
+  <!-- Content Container -->
+  <div id="app-content">
+    {% block content %}{% endblock %}
+  </div>
+
+  {% block scripts %}{% endblock %}
+  <script src="/static/app.js"></script>
+</body>
+</html>

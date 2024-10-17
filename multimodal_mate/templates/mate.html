@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+
+{% block title %}MultimodalMate{% endblock %}
+
+{% block head_extra %}
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/highlight.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/styles/default.min.css">
+    <script src="{{ url_for('mate_static', path='mate.js') }}" defer></script>
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        #mate-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding-top: 60px; /* Height of the toggle bar */
+            box-sizing: border-box;
+        }
+        #chatHistory {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+        #inputArea {
+            padding: 1rem;
+            background-color: #1F2937;
+            border-top: 1px solid #374151;
+        }
+        .markdown-body pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-width: 100%;
+        }
+        .markdown-body code {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .message-content {
+            max-width: 100%;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            word-break: break-word;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div id="mate-container" class="bg-gray-800 text-white">
+        <div id="chatHistory">
+            <!-- Chat messages will be appended here -->
+        </div>
+        
+        <div id="inputArea" class="sticky bottom-0">
+            <div class="relative flex items-center">
+                <input type="text" id="userInput" placeholder="Hello Mate, How may I help you?" 
+                       class="w-full p-3 pr-20 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white">
+                <div class="absolute right-3 flex items-center space-x-2">
+                    <label for="fileUpload" class="cursor-pointer">
+                        <ion-icon name="attach-outline" class="text-gray-400 hover:text-white text-xl"></ion-icon>
+                    </label>
+                    <button id="sendButton" class="text-gray-400 hover:text-white">
+                        <ion-icon name="send" class="text-xl"></ion-icon>
+                    </button>
+                </div>
+            </div>
+            <input type="file" id="fileUpload" class="hidden" multiple accept="*">
+        </div>
+    </div>
+    
+    <div id="uploadStatus" class="fixed bottom-4 right-4 bg-gray-700 p-3 rounded-lg shadow-lg text-sm text-white hidden"></div>
+{% endblock %}

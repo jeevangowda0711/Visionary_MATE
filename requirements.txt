@@ -1,0 +1,39 @@
+# Core FastAPI and Web
+fastapi
+uvicorn
+jinja2
+python-multipart
+python-dotenv
+requests
+pydantic>=2.0.0
+aiofiles
+
+# AI and NLP
+google-generativeai>=0.3.0
+langchain-huggingface
+sentence-transformers
+llama-index
+llama-index-llms-gemini
+llama-index-embeddings-huggingface
+llama-index-core
+
+# Audio Processing
+google-cloud-texttospeech==2.14.1
+pydub
+git+https://github.com/openai/whisper
+
+# Document and Image Processing
+pdfplumber
+python-pptx
+polars
+openpyxl
+pytesseract
+Pillow
+img2table
+python-docx
+ebooklib
+pyhwp
+PyPDF2
+
+# Miscellaneous
+nbconvert
