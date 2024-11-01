@@ -27,7 +27,7 @@ Welcome to **Visionary_MATE**, a powerful and innovative platform designed to as
 
 ### 🌍 **Real-Time Location Assistance**
 - **Geolocation Integration**: Fetches real-time GPS data and delivers step-by-step navigation assistance using the **Mapbox API**.
-- **Voice-Activated Navigation**: Users can ask for directions, and the system will return detailed voice-based guidance to the nearest destination.
+- **Voice-Activated Navigation**: Users can ask for directions, and the system will return detailed step-by-step voice-based guidance to the nearest destination.
 
 ---
 
